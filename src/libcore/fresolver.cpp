@@ -84,8 +84,12 @@ FileResolver::FileResolver() {
 #endif
     #if BOOST_VERSION >= 104800
         m_paths.push_back(fs::canonical(basePath));
+        m_paths.push_back(fs::canonical(MITSUBA_ROOT_DIR));
+        m_paths.push_back(fs::canonical(MITSUBA_BIN_DIR));
     #else
         m_paths.push_back(fs::absolute(basePath));
+        m_paths.push_back(fs::absolute(MITSUBA_ROOT_DIR));
+        m_paths.push_back(fs::absolute(MITSUBA_BIN_DIR));
     #endif
     m_paths.push_back(fs::current_path());
 }
