@@ -17,7 +17,8 @@
 */
 
 #pragma once
-
+#include <algorithm>
+#include <cmath>
 #if !defined(__MITSUBA_CORE_MATH_H_)
 #define __MITSUBA_CORE_MATH_H_
 

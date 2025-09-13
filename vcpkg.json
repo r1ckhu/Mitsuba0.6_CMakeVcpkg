@@ -1,0 +1,27 @@
+{
+   "name": "mitsuba",
+   "version-string": "1.0.0",
+   "dependencies": [
+      "boost-python",
+      "boost-filesystem",
+      "boost-thread",
+      "boost-chrono",
+      "boost-date-time",
+      "boost-atomic",
+      "zlib",
+      "openexr",
+      "libjpeg-turbo",
+      "libpng",
+      "xerces-c",
+      "glew",
+      "eigen3",
+      {
+         "name": "fftw3",
+         "features": [
+            "threads"
+         ]
+      },
+      "qt5-base",
+      "qt5-xmlpatterns"
+   ]
+}

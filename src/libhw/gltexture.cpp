@@ -16,12 +16,15 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <mitsuba/mitsuba.h>
 #if defined(__OSX__)
 #include <OpenGL/glew.h>
 #else
+#define NOMINMAX
+#include <windows.h>
 #include <GL/glew.h>
+#include <gl/GLU.h>
 #endif
+#include <mitsuba/mitsuba.h>
 #include <mitsuba/hw/gltexture.h>
 
 #ifndef GL_FRAMEBUFFER_INCOMPLETE_DUPLICATE_ATTACHMENT_EXT

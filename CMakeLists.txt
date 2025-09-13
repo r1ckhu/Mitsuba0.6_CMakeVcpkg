@@ -1,116 +1,113 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.15) # 建议提高版本以获得更好的 vcpkg 和现代 CMake 支持
 
 project(Mitsuba)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(ENV{http_proxy}  "http://127.0.0.1:10809") # for http
-set(ENV{https_proxy} "http://127.0.0.1:10809") # for https
-
+# --- 基本项目设置 ---
 if(NOT COMPILE_THREAD)
-	include(ProcessorCount)
-	ProcessorCount(COMPILE_THREAD)
-message("Thread Count: ${COMPILE_THREAD}")
-endif(NOT COMPILE_THREAD)
+    include(ProcessorCount)
+    ProcessorCount(COMPILE_THREAD)
+    message(STATUS "Using ${COMPILE_THREAD} threads for parallel builds.")
+endif()
 
 if(MSVC)
-  add_definitions(/MP)
+  add_compile_options(/MP) # 启用多进程编译
 endif()
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 set(MITSUBA_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-set(MITSUBA_DEPENDENCY_DIR ${MITSUBA_ROOT_DIR}/dependencies)
 set(MITSUBA_BIN_DIR ${CMAKE_BINARY_DIR}/bin)
 file(MAKE_DIRECTORY ${MITSUBA_BIN_DIR})
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${MITSUBA_BIN_DIR})
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${MITSUBA_BIN_DIR})
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${MITSUBA_BIN_DIR})
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${MITSUBA_BIN_DIR})
 
-# if(NOT CMAKE_BUILD_TYPE)
-# 	set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING # RelWithDebInfo CACHE STRING
-# 		"Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel."
-# 		FORCE)
-# endif(NOT CMAKE_BUILD_TYPE)
+# 设置所有构建类型的输出目录
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${MITSUBA_BIN_DIR})
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# Configure external dependencies
-if (NOT QT_DIR)
-	set(QT_DIR "C:/Qt/5.15.2/msvc2019_64" CACHE STRING "Qt5 library path" FORCE)
-	message("No QT_DIR specified. QT_DIR is set to default value 'C:/Qt/5.15.2/msvc2019_64'")
-endif(NOT QT_DIR)
-find_package(Qt5 HINTS ${QT_DIR} COMPONENTS Core Gui Widgets Xml Network OpenGL XmlPatterns REQUIRED)
+# --- 查找依赖 (由 vcpkg 提供) ---
+# vcpkg 会自动处理以下 find_package 调用
 
-if (NOT Python_ROOT_DIR)
-	set(Python_ROOT_DIR "C:/Program Files/Python39" CACHE STRING "Python installtion path" FORCE)
-	message("No Python_ROOT_DIR specified. Python_ROOT_DIR is set to default value 'C:/Program Files/Python39'")
-endif(NOT Python_ROOT_DIR)
+find_package(Qt5 COMPONENTS Core Gui Widgets Xml Network OpenGL XmlPatterns REQUIRED)
+find_package(ZLIB REQUIRED)
+find_package(OpenEXR REQUIRED)
+# Boost 版本由 vcpkg 控制。移除 CMake 中的硬编码版本以避免冲突。
+find_package(Boost REQUIRED COMPONENTS filesystem thread chrono date_time atomic)
+find_package(Imath REQUIRED) 
+find_package(libjpeg-turbo REQUIRED)
+find_package(XercesC REQUIRED)
+find_package(PNG REQUIRED)
+find_package(GLEW REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(FFTW3 CONFIG REQUIRED)
+find_package(FFTW3f CONFIG REQUIRED)
+
+# --- 查找 Python (系统安装) ---
 find_package(Python COMPONENTS Interpreter Development REQUIRED)
 set(PYTHON_VERSION_WITHOUT_DOT "python${Python_VERSION_MAJOR}${Python_VERSION_MINOR}")
-message("Found python version: ${PYTHON_VERSION_WITHOUT_DOT}")
+message(STATUS "Found Python: ${Python_EXECUTABLE} (version ${Python_VERSION})")
+# 查找与找到的 Python 版本匹配的 Boost::python 组件
+find_package(Boost REQUIRED COMPONENTS ${PYTHON_VERSION_WITHOUT_DOT})
 
-find_package( PythonLibs REQUIRED )
-include_directories( ${PYTHON_INCLUDE_DIRS} )
-link_directories(${PYTHON_LIBRARIES})
 
-set(ZLIB_ROOT ${MITSUBA_DEPENDENCY_DIR})
-find_package(ZLIB REQUIRED)
-
-set(OpenEXR_ROOT ${MITSUBA_DEPENDENCY_DIR})
-find_package(OpenEXR REQUIRED)
-
-set(BOOST_ROOT ${MITSUBA_DEPENDENCY_DIR})
-find_package(Boost 1.77.0 REQUIRED COMPONENTS ${PYTHON_VERSION_WITHOUT_DOT} filesystem thread chrono date_time atomic)
-
-set(libjpeg-turbo_ROOT ${MITSUBA_DEPENDENCY_DIR})
-find_package(libjpeg-turbo REQUIRED)
-
-set(XercesC_ROOT ${MITSUBA_DEPENDENCY_DIR})
-find_package(XercesC REQUIRED)
-
-include_directories(${QT_INCLUDES})
+# --- 设置包含目录 ---
+# find_package 已自动处理依赖的包含目录，只需添加项目本身的 include
 include_directories("${MITSUBA_ROOT_DIR}/include")
-include_directories("${MITSUBA_DEPENDENCY_DIR}/include")
-include_directories("${MITSUBA_DEPENDENCY_DIR}/include/openexr")
-include_directories("${MITSUBA_DEPENDENCY_DIR}/include/Imath")
-link_directories("${MITSUBA_DEPENDENCY_DIR}/lib")
+# --- 为 OpenEXR/Imath 添加兼容性包含路径 ---
+find_package(OpenEXR REQUIRED) # 确保 OpenEXR_INCLUDE_DIRS 变量可用
+include_directories(${OpenEXR_INCLUDE_DIRS}) # 添加 .../include 自身
+# 添加关键的子目录
 
-# Config mitsuba
-set(Mitsuba_Float_Percision "SINGLE_PRECISION" CACHE STRING "Precision of float" FORCE)
-set(Mitsuba_Spectrum_Samples "SPECTRUM_SAMPLES=3" CACHE STRING "Number of spectrum samples" FORCE)
+
+find_package(Imath REQUIRED)
+message(STATUS "Imath include directories: ${Imath_INCLUDE_DIRS}")
+message(STATUS "Imath libraries: ${Imath_LIBRARIES}")
+# include_directories(${Imath_INCLUDE_DIRS})
+
+# --- 配置 Mitsuba 编译定义 ---
+set(Mitsuba_Float_Percision "SINGLE_PRECISION")
+set(Mitsuba_Spectrum_Samples "SPECTRUM_SAMPLES=3")
 set(Mitsuba_SSE "MTS_SSE")
 set(Mitsuba_Has_Coherent_RT "MTS_HAS_COHERENT_RT")
 set(Mitsuba_Debug "MTS_DEBUG")
 set(Mitsuba_OpenEXR "OPENEXR_DLL")
 
-set(BASE_LIB_LIST ws2_32 ZLIB::ZLIB)
+add_compile_definitions(
+    ${Mitsuba_Float_Percision}
+    ${Mitsuba_Spectrum_Samples}
+    ${Mitsuba_SSE}
+    ${Mitsuba_Has_Coherent_RT}
+    ${Mitsuba_Debug}
+    ${Mitsuba_OpenEXR}
+    MTS_HAS_LIBPNG=1
+    MTS_HAS_LIBJPEG=1
+    MTS_HAS_OPENEXR=1
+    MTS_HAS_FFTW=1
+    DEBUG
+    _CONSOLE
+)
+
+if(MSVC)
+    add_compile_options(/openmp)
+    add_link_options(/FIXED:NO /SUBSYSTEM:CONSOLE /NODEFAULTLIB:LIBCMT /MANIFEST)
+endif()
+
+# --- 定义库列表 (使用现代 CMake 目标) ---
+# 这些变量会在子目录的 CMakeLists.txt 中被使用
+set(BASE_LIB_LIST ws2_32 Eigen3::Eigen)
 set(QT_LIB_LIST Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Xml Qt5::Network Qt5::OpenGL Qt5::XmlPatterns)
-set(OPENEXR_LIB_LIST OpenEXR::OpenEXR OpenEXR::IlmThread OpenEXR::Iex)
+set(OPENEXR_LIB_LIST OpenEXR::OpenEXR)
 set(BOOST_LIB_LIST Boost::${PYTHON_VERSION_WITHOUT_DOT} Boost::filesystem Boost::thread)
 set(JEPG_LIB_LIST libjpeg-turbo::jpeg)
 set(XERCES_LIB_LIST XercesC::XercesC)
-set(PNG_LIB_LIST libpng16)
-set(FFTW_LIB_LIST libfftw3-3)
-set(GL_LIB_LIST opengl32 glu32 glew32 gdi32 user32)
+set(PNG_LIB_LIST PNG::PNG) # 现代目标
+set(FFTW_LIB_LIST FFTW3::fftw3f FFTW3::fftw3)
+set(GL_LIB_LIST opengl32 glu32 GLEW::glew gdi32 user32) # 现代目标
 
-add_compile_definitions(
-	${Mitsuba_Float_Percision}
-	${Mitsuba_Spectrum_Samples}
-	${Mitsuba_SSE}
-	${Mitsuba_Has_Coherent_RT}
-	${Mitsuba_Debug}
-	${Mitsuba_OpenEXR}
-	MTS_HAS_LIBPNG=1
-	MTS_HAS_LIBJPEG=1
-	MTS_HAS_OPENEXR=1
-	MTS_HAS_FFTW=1
-	DEBUG
-	_CONSOLE
-)
 
-add_compile_options(/openmp)
-add_link_options(/FIXED:NO /SUBSYSTEM:CONSOLE /NODEFAULTLIB:LIBCMT /MANIFEST)
-
+# --- 添加子项目 ---
 add_subdirectory(src/libcore)
 add_subdirectory(src/librender)
 add_subdirectory(src/libhw)
@@ -122,16 +119,16 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 add_subdirectory(src/mtsgui)
-
 set(CMAKE_AUTOMOC OFF)
 set(CMAKE_AUTORCC OFF)
 set(CMAKE_AUTOUIC OFF)
+
 set(MITSUBA_PLUGIN_BIN_DIR ${MITSUBA_BIN_DIR}/plugins)
 file(MAKE_DIRECTORY ${MITSUBA_PLUGIN_BIN_DIR})
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${MITSUBA_PLUGIN_BIN_DIR})
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${MITSUBA_PLUGIN_BIN_DIR})
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${MITSUBA_PLUGIN_BIN_DIR})
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${MITSUBA_PLUGIN_BIN_DIR})
+
+# 为插件目标设置特定的输出目录
+# 注意：这会覆盖全局设置，所以在此之后添加的 target 会输出到这里
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${MITSUBA_PLUGIN_BIN_DIR})
 add_subdirectory(src/utils)
 add_subdirectory(src/bsdfs)
 add_subdirectory(src/phase)
@@ -148,15 +145,18 @@ add_subdirectory(src/textures)
 add_subdirectory(src/integrators)
 add_subdirectory(src/tests)
 
-# Copy data
+# 恢复默认的输出目录，以防后续有其他非插件目标
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${MITSUBA_BIN_DIR})
+
+# --- 复制数据文件 (项目特定逻辑，予以保留) ---
 file(MAKE_DIRECTORY ${MITSUBA_ROOT_DIR}/data)
 file(COPY ${MITSUBA_ROOT_DIR}/data/schema DESTINATION ${MITSUBA_BIN_DIR}/data/)
 file(COPY ${MITSUBA_ROOT_DIR}/data/ior DESTINATION ${MITSUBA_BIN_DIR}/data/)
 file(COPY ${MITSUBA_ROOT_DIR}/data/microfacet DESTINATION ${MITSUBA_BIN_DIR}/data/)
 
-# Copy required dlls
-file(GLOB Qt5_DLL_LIST ${Qt5Core_DIR}/../../../bin/*.dll)
-file(COPY ${Qt5_DLL_LIST} DESTINATION ${MITSUBA_BIN_DIR}/)
-file(COPY ${Qt5Core_DIR}/../../../plugins/platforms DESTINATION ${MITSUBA_BIN_DIR}/plugins/)
-file(GLOB DEPENDENCIES_DLL_LIST ${MITSUBA_DEPENDENCY_DIR}/bin/*.dll)
-file(COPY ${DEPENDENCIES_DLL_LIST} DESTINATION ${MITSUBA_BIN_DIR})
+# --- DLL 复制说明 ---
+# vcpkg 会在构建时自动将依赖的 DLL 复制到输出目录（MITSUBA_BIN_DIR）。
+# 手动复制 DLL 的代码不再需要，已移除。
+# 对于 Qt 的平台插件 (platforms)，如果运行时出现问题，
+# 推荐使用 Qt 官方的 windeployqt 工具进行部署，而不是手动复制。
+# 例如: C:\Qt\5.15.2\msvc2019_64\bin\windeployqt.exe ${MITSUBA_BIN_DIR}/your_app.exe
